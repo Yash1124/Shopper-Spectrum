@@ -53,42 +53,59 @@ st.markdown("""
 def load_data():
     """Load and prepare the dataset"""
     try:
-        # Load your dataset - replace with your actual file path
-        df = pd.read_csv('online_retail.csv')
+        # Try multiple possible filenames
+        possible_files = ['online_retail.csv', 'ecommerce_data.csv', 'Online Retail.csv']
+        df = None
+        
+        for filename in possible_files:
+            try:
+                df = pd.read_csv(filename)
+                st.success(f"✅ Dataset loaded successfully: {filename}")
+                break
+            except FileNotFoundError:
+                continue
+        
+        if df is None:
+            st.error("❌ Dataset not found! Please ensure one of these files exists: " + ", ".join(possible_files))
+            return None
         
         # Basic data cleaning
         df = df.dropna(subset=['Description', 'StockCode'])
-        df = df[df['Quantity'] > 0]
-        df = df[df['UnitPrice'] > 0]
+        df = df[df['Quantity'] > 0]  # Fixed HTML entity
+        df = df[df['UnitPrice'] > 0]  # Fixed HTML entity
         
         # Remove duplicates and clean descriptions
         df['Description'] = df['Description'].str.strip().str.upper()
         df = df.drop_duplicates(subset=['StockCode', 'Description'])
         
         return df
-    except FileNotFoundError:
-        st.error("Dataset not found! Please upload 'ecommerce_data.csv' to the app directory.")
+    except Exception as e:
+        st.error(f"❌ Error loading dataset: {str(e)}")
         return None
 
 @st.cache_data
 def prepare_recommendation_data(df):
     """Prepare data for collaborative filtering"""
-    # Create user-item matrix
-    user_item_matrix = df.pivot_table(
-        index='CustomerID', 
-        columns='StockCode', 
-        values='Quantity', 
-        aggfunc='sum', 
-        fill_value=0
-    )
-    
-    # Create product similarity matrix using TF-IDF on descriptions
-    tfidf = TfidfVectorizer(max_features=1000, stop_words='english')
-    
-    # Get unique products with descriptions
-    products_df = df.groupby('StockCode')['Description'].first().reset_index()
-    
     try:
+        # Create user-item matrix
+        user_item_matrix = df.pivot_table(
+            index='CustomerID',
+            columns='StockCode',
+            values='Quantity',
+            aggfunc='sum',
+            fill_value=0
+        )
+        
+        # Create product similarity matrix using TF-IDF on descriptions
+        tfidf = TfidfVectorizer(max_features=1000, stop_words='english')
+        
+        # Get unique products with descriptions
+        products_df = df.groupby('StockCode')['Description'].first().reset_index()
+        
+        if products_df.empty:
+            st.error("❌ No products found in dataset")
+            return None, None, None, None
+        
         tfidf_matrix = tfidf.fit_transform(products_df['Description'])
         content_similarity = cosine_similarity(tfidf_matrix)
         
@@ -96,8 +113,8 @@ def prepare_recommendation_data(df):
         product_lookup = dict(zip(products_df['StockCode'], products_df['Description']))
         
         return user_item_matrix, content_similarity, products_df, product_lookup
-    except:
-        st.error("Error processing product descriptions for recommendations.")
+    except Exception as e:
+        st.error(f"❌ Error processing product descriptions: {str(e)}")
         return None, None, None, None
 
 def get_product_recommendations(product_name, products_df, content_similarity, product_lookup, top_n=5):
@@ -176,6 +193,9 @@ def main():
     df = load_data()
     if df is None:
         st.stop()
+    
+    # Show dataset info
+    st.success(f"📊 Dataset loaded: {len(df)} records, {df['StockCode'].nunique()} unique products")
     
     # Prepare recommendation data
     with st.spinner("🔄 Preparing recommendation engine..."):
