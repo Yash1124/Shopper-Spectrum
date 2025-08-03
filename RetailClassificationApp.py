@@ -54,7 +54,7 @@ def load_data():
     """Load and prepare the dataset"""
     try:
         # Load your dataset - replace with your actual file path
-        df = pd.read_csv('ecommerce_data.csv')
+        df = pd.read_csv('online_retail.csv')
         
         # Basic data cleaning
         df = df.dropna(subset=['Description', 'StockCode'])
